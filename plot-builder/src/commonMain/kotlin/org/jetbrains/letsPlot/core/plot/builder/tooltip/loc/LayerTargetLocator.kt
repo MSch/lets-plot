@@ -81,12 +81,8 @@ internal class LayerTargetLocator(
         }
 
         for (prototype in targetPrototypes) {
-            myTargets.add(
-                Target(
-                    toProjection(prototype),
-                    prototype
-                )
-            )
+            println("prototype: $prototype, ${prototype.hitShape}")
+            myTargets.add(Target(toProjection(prototype), prototype))
         }
     }
 

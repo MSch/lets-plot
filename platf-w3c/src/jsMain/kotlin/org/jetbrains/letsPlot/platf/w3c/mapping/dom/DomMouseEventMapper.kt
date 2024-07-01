@@ -24,7 +24,7 @@ import kotlin.math.roundToInt
 typealias DomMouseEvent = org.w3c.dom.events.MouseEvent
 typealias DomWheelEvent = WheelEvent
 
-private const val ENABLE_DEBUG_LOG = false
+private const val ENABLE_DEBUG_LOG = true
 
 class DomMouseEventMapper(
     private val eventTarget: Element,

@@ -23,7 +23,11 @@ open class HitShape private constructor(val kind: Kind, private val shape: Any) 
         POINT, RECT, POLYGON, PATH
     }
 
-    class DoubleCircle(val center: DoubleVector, val radius: Double)
+    override fun toString(): String {
+        return "HitShape(kind=$kind, shape=$shape)"
+    }
+
+    data class DoubleCircle(val center: DoubleVector, val radius: Double)
 
     companion object {
         fun point(p: DoubleVector, radius: Double): HitShape {
