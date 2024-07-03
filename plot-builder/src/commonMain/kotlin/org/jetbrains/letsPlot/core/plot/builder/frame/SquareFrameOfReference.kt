@@ -6,7 +6,6 @@
 package org.jetbrains.letsPlot.core.plot.builder.frame
 
 import org.jetbrains.letsPlot.commons.geometry.DoubleRectangle
-import org.jetbrains.letsPlot.commons.geometry.DoubleVector
 import org.jetbrains.letsPlot.commons.values.Color
 import org.jetbrains.letsPlot.core.plot.base.CoordinateSystem
 import org.jetbrains.letsPlot.core.plot.base.PlotContext
@@ -16,7 +15,6 @@ import org.jetbrains.letsPlot.core.plot.base.render.svg.SvgComponent
 import org.jetbrains.letsPlot.core.plot.base.scale.ScaleBreaks
 import org.jetbrains.letsPlot.core.plot.base.theme.AxisTheme
 import org.jetbrains.letsPlot.core.plot.base.theme.PanelGridTheme
-import org.jetbrains.letsPlot.core.plot.base.theme.PanelTheme
 import org.jetbrains.letsPlot.core.plot.base.theme.Theme
 import org.jetbrains.letsPlot.core.plot.base.tooltip.GeomTargetCollector
 import org.jetbrains.letsPlot.core.plot.builder.*
@@ -40,7 +38,7 @@ internal open class SquareFrameOfReference(
     private val theme: Theme,
     private val flipAxis: Boolean,
     private val plotContext: PlotContext
-) : FrameOfReference {
+) : FrameOfReference() {
 
     var isDebugDrawing: Boolean = false
 
@@ -48,21 +46,7 @@ internal open class SquareFrameOfReference(
     protected val hAxisTheme = theme.horizontalAxis(flipAxis)
     protected val vAxisTheme = theme.verticalAxis(flipAxis)
 
-    private var panOffset: DoubleVector = DoubleVector.ZERO
-    private var scale: DoubleVector = DoubleVector(1.0, 1.0)
-
-    override fun zoom(scale: DoubleVector) {
-        this.scale = scale
-    }
-
-    override fun pan(from: DoubleVector, to: DoubleVector): DoubleVector? {
-        panOffset = to.subtract(from)
-
-        val domainFrom = coord.fromClient(from) ?: return null
-        val domainTo = coord.fromClient(to) ?: return null
-
-        return domainTo.subtract(domainFrom)
-    }
+    override val transientState: ComponentTransientState = TransientState()
 
     override fun toDataBounds(clientRect: DoubleRectangle): DoubleRectangle {
         val domainPoint0 = coord.fromClient(clientRect.origin)
@@ -87,15 +71,15 @@ internal open class SquareFrameOfReference(
         val geomInnerBounds: DoubleRectangle = layoutInfo.geomInnerBounds
         val panelTheme = theme.panel()
 
-        val hGridTheme = panelTheme.gridX(flipAxis)
-        val vGridTheme = panelTheme.gridY(flipAxis)
+        val vGridTheme = panelTheme.verticalGrid(flipAxis)
+        val hGridTheme = panelTheme.horizontalGrid(flipAxis)
 
         val fillBkgr = panelTheme.showRect() && beforeGeomLayer
         val strokeBkgr = panelTheme.showRect() && (panelTheme.borderIsOntop() xor beforeGeomLayer)
         val drawPanelBorder = panelTheme.showBorder() && (panelTheme.borderIsOntop() xor beforeGeomLayer)
 
-        val drawHGrid = beforeGeomLayer xor hGridTheme.isOntop()
         val drawVGrid = beforeGeomLayer xor vGridTheme.isOntop()
+        val drawHGrid = beforeGeomLayer xor hGridTheme.isOntop()
         val drawHAxis = beforeGeomLayer xor hAxisTheme.isOntop()
         val drawVAxis = beforeGeomLayer xor vAxisTheme.isOntop()
 
@@ -103,12 +87,12 @@ internal open class SquareFrameOfReference(
             doFillBkgr(parent)
         }
 
-        if (drawHGrid) {
-            doDrawHGrid(hGridTheme, parent)
-        }
-
         if (drawVGrid) {
             doDrawVGrid(vGridTheme, parent)
+        }
+
+        if (drawHGrid) {
+            doDrawHGrid(hGridTheme, parent)
         }
 
         if (drawHAxis) {
@@ -144,7 +128,7 @@ internal open class SquareFrameOfReference(
 
     protected open fun doDrawVAxis(parent: SvgComponent) {
         listOfNotNull(layoutInfo.axisInfos.left, layoutInfo.axisInfos.right).forEach { axisInfo ->
-            val (labelAdjustments, breaksData) = prepareAxisData(axisInfo, vScaleBreaks, vAxisTheme, theme.panel())
+            val (labelAdjustments, breaksData) = prepareAxisData(axisInfo, vScaleBreaks, vAxisTheme)
 
             val axisComponent = buildAxis(
                 breaksData = breaksData,
@@ -169,7 +153,7 @@ internal open class SquareFrameOfReference(
 
     protected open fun doDrawHAxis(parent: SvgComponent) {
         listOfNotNull(layoutInfo.axisInfos.top, layoutInfo.axisInfos.bottom).forEach { axisInfo ->
-            val (labelAdjustments, breaksData) = prepareAxisData(axisInfo, hScaleBreaks, hAxisTheme, theme.panel())
+            val (labelAdjustments, breaksData) = prepareAxisData(axisInfo, hScaleBreaks, hAxisTheme)
 
             val axisComponent = buildAxis(
                 breaksData = breaksData,
@@ -192,17 +176,17 @@ internal open class SquareFrameOfReference(
         }
     }
 
-    protected open fun doDrawVGrid(vGridTheme: PanelGridTheme, parent: SvgComponent) {
-        listOfNotNull(layoutInfo.axisInfos.left, layoutInfo.axisInfos.right).forEach { axisInfo ->
-            val (_, breaksData) = prepareAxisData(axisInfo, vScaleBreaks, vAxisTheme, theme.panel())
+    protected open fun doDrawHGrid(gridTheme: PanelGridTheme, parent: SvgComponent) {
+        (layoutInfo.axisInfos.left ?: layoutInfo.axisInfos.right)?.let { axisInfo ->
+            val (_, breaksData) = prepareAxisData(axisInfo, vScaleBreaks, vAxisTheme)
 
             val gridComponent = GridComponent(
                 majorGrid = breaksData.majorGrid,
                 minorGrid = breaksData.minorGrid,
-                orientation = axisInfo.orientation,
+                isHorizontal = true,
                 isOrthogonal = true,
                 geomContentBounds = layoutInfo.geomContentBounds,
-                gridTheme = vGridTheme,
+                gridTheme = gridTheme,
                 panelTheme = theme.panel(),
             )
             val gridOrigin = layoutInfo.geomContentBounds.origin
@@ -211,17 +195,17 @@ internal open class SquareFrameOfReference(
         }
     }
 
-    protected open fun doDrawHGrid(hGridTheme: PanelGridTheme, parent: SvgComponent) {
-        listOfNotNull(layoutInfo.axisInfos.top, layoutInfo.axisInfos.bottom).forEach { axisInfo ->
-            val (_, breaksData) = prepareAxisData(axisInfo, hScaleBreaks, hAxisTheme, theme.panel())
+    protected open fun doDrawVGrid(gridTheme: PanelGridTheme, parent: SvgComponent) {
+        (layoutInfo.axisInfos.top ?: layoutInfo.axisInfos.bottom)?.let { axisInfo ->
+            val (_, breaksData) = prepareAxisData(axisInfo, hScaleBreaks, hAxisTheme)
 
             val gridComponent = GridComponent(
                 majorGrid = breaksData.majorGrid,
                 minorGrid = breaksData.minorGrid,
-                orientation = axisInfo.orientation,
+                isHorizontal = false,
                 isOrthogonal = true,
                 geomContentBounds = layoutInfo.geomContentBounds,
-                gridTheme = hGridTheme,
+                gridTheme = gridTheme,
                 panelTheme = theme.panel(),
             )
             val gridOrigin = layoutInfo.geomContentBounds.origin
@@ -248,11 +232,10 @@ internal open class SquareFrameOfReference(
     }
 
 
-    protected open fun prepareAxisData(
+    private fun prepareAxisData(
         axisInfo: AxisLayoutInfo,
         scaleBreaks: ScaleBreaks,
         axisTheme: AxisTheme,
-        panelTheme: PanelTheme
     ): Pair<TickLabelAdjustments, BreaksData> {
         val labelAdjustments = TickLabelAdjustments(
             orientation = axisInfo.orientation,
@@ -264,7 +247,11 @@ internal open class SquareFrameOfReference(
 
         val breaksData = AxisUtil.breaksData(
             scaleBreaks = scaleBreaks,
-            coord = TransformedCoordinateSystem(coord, panOffset, scale),
+            coord = TransformedCoordinateSystem(
+                coord,
+                translate = transientState.offset,
+                scale = transientState.scale
+            ),
             domain = adjustedDomain,
             flipAxis = flipAxis,
             orientation = axisInfo.orientation,
@@ -274,7 +261,7 @@ internal open class SquareFrameOfReference(
         return Pair(labelAdjustments, breaksData)
     }
 
-    protected fun drawDebugShapes(parent: SvgComponent, geomBounds: DoubleRectangle) {
+    private fun drawDebugShapes(parent: SvgComponent, geomBounds: DoubleRectangle) {
         run {
             val tileBounds = layoutInfo.geomWithAxisBounds
             val rect = SvgRectElement(tileBounds)
@@ -415,6 +402,19 @@ internal open class SquareFrameOfReference(
             val geom = layer.geom
 
             return SvgLayerRenderer(aesthetics, geom, pos, coord, ctx)
+        }
+    }
+
+    inner class TransientState : ComponentTransientState(
+        bounds = layoutInfo.geomContentBounds
+    ) {
+        override fun toDataBounds(clientRect: DoubleRectangle): DoubleRectangle {
+            return this@SquareFrameOfReference.toDataBounds(clientRect)
+        }
+
+        override fun repaint() {
+            // Repaint axis and grid.
+            repaintFrame()
         }
     }
 }
